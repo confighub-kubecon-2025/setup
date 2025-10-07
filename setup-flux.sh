@@ -20,11 +20,19 @@ kubectl apply -f setup/deploy-ingress-nginx.yaml
 kubectl create namespace appchat
 kubectl create namespace appvote
 kubectl create namespace apptique
+
+# This sleep appears to be necessary so that Ingress resources aren't blocked
+sleep 30
+
 kubectl apply -f appchat/flux/gitrepository.yaml
-kubectl apply -f appchat/flux/helmrelease-dev.yaml
 kubectl apply -f appvote/flux/gitrepository.yaml
-kubectl apply -f appvote/flux/helmrelease-dev.yaml
 kubectl apply -f apptique/flux/gitrepository.yaml
+
+# This sleep appears to be necessary so that helm installation doesn't fail
+sleep 30
+
+kubectl apply -f appchat/flux/helmrelease-dev.yaml
+kubectl apply -f appvote/flux/helmrelease-dev.yaml
 kubectl apply -f apptique/flux/helmrelease-dev.yaml
 
 if ! [[ -z "$SETUP_PROD" ]] ; then
@@ -36,11 +44,17 @@ kubectl apply -f setup/deploy-ingress-nginx.yaml
 kubectl create namespace appchat
 kubectl create namespace appvote
 kubectl create namespace apptique
+
+sleep 30
+
 kubectl apply -f appchat/flux/gitrepository.yaml
-kubectl apply -f appchat/flux/helmrelease-prod.yaml
 kubectl apply -f appvote/flux/gitrepository.yaml
-kubectl apply -f appvote/flux/helmrelease-prod.yaml
 kubectl apply -f apptique/flux/gitrepository.yaml
+
+sleep 30
+
+kubectl apply -f appchat/flux/helmrelease-prod.yaml
+kubectl apply -f appvote/flux/helmrelease-prod.yaml
 kubectl apply -f apptique/flux/helmrelease-prod.yaml
 
 fi
