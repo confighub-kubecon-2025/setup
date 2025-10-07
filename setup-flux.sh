@@ -13,6 +13,7 @@
 cd ..
 
 kind create cluster --name dev --config setup/dev-cluster.yaml 
+flux install
 #https://kind.sigs.k8s.io/docs/user/ingress
 #kubectl apply -f ../deploy-ingress-nginx.yaml
 kubectl apply -f https://kind.sigs.k8s.io/examples/ingress/deploy-ingress-nginx.yaml
@@ -27,6 +28,7 @@ kubectl apply -f apptique/flux/gitrepository.yaml
 kubectl apply -f apptique/flux/helmrelease-dev.yaml
 
 kind create cluster --name prod --config setup/prod-cluster.yaml 
+flux install
 #kubectl apply -f ../deploy-ingress-nginx.yaml
 kubectl apply -f https://kind.sigs.k8s.io/examples/ingress/deploy-ingress-nginx.yaml
 kubectl create namespace appchat
