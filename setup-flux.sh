@@ -15,8 +15,8 @@ cd ..
 kind create cluster --name dev --config setup/dev-cluster.yaml 
 flux install
 #https://kind.sigs.k8s.io/docs/user/ingress
-#kubectl apply -f ../deploy-ingress-nginx.yaml
-kubectl apply -f https://kind.sigs.k8s.io/examples/ingress/deploy-ingress-nginx.yaml
+kubectl apply -f setup/deploy-ingress-nginx.yaml
+#kubectl apply -f https://kind.sigs.k8s.io/examples/ingress/deploy-ingress-nginx.yaml
 kubectl create namespace appchat
 kubectl create namespace appvote
 kubectl create namespace apptique
@@ -31,8 +31,8 @@ if ! [[ -z "$SETUP_PROD" ]] ; then
 
 kind create cluster --name prod --config setup/prod-cluster.yaml 
 flux install
-#kubectl apply -f ../deploy-ingress-nginx.yaml
-kubectl apply -f https://kind.sigs.k8s.io/examples/ingress/deploy-ingress-nginx.yaml
+kubectl apply -f setup/deploy-ingress-nginx.yaml
+#kubectl apply -f https://kind.sigs.k8s.io/examples/ingress/deploy-ingress-nginx.yaml
 kubectl create namespace appchat
 kubectl create namespace appvote
 kubectl create namespace apptique
