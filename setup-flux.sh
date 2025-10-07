@@ -27,6 +27,8 @@ kubectl apply -f appvote/flux/helmrelease-dev.yaml
 kubectl apply -f apptique/flux/gitrepository.yaml
 kubectl apply -f apptique/flux/helmrelease-dev.yaml
 
+if ! [[ -z "$SETUP_PROD" ]] ; then
+
 kind create cluster --name prod --config setup/prod-cluster.yaml 
 flux install
 #kubectl apply -f ../deploy-ingress-nginx.yaml
@@ -40,3 +42,5 @@ kubectl apply -f appvote/flux/gitrepository.yaml
 kubectl apply -f appvote/flux/helmrelease-prod.yaml
 kubectl apply -f apptique/flux/gitrepository.yaml
 kubectl apply -f apptique/flux/helmrelease-prod.yaml
+
+fi
