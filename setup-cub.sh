@@ -42,14 +42,27 @@ if ! [[ -z "$CREATE_UNITS" ]] ; then
 cub unit create --space appchat-dev --label Application=appchat database cubbychat/database/postgres.yaml
 cub unit create --space appchat-dev --label Application=appchat backend cubbychat/backend/backend-no-ai.yaml
 cub unit create --space appchat-dev --label Application=appchat frontend cubbychat/frontend/frontend.yaml
-# TODO: clone to prod and customize
+# TODO: Use a bulk clone
+cub unit create --space appchat-prod --upstream-space appchat-dev --upstream-unit database database
+cub unit create --space appchat-prod --upstream-space appchat-dev --upstream-unit backend backend
+cub unit create --space appchat-prod --upstream-space appchat-dev --upstream-unit frontend frontend
+cub function do --space appchat-dev --unit frontend --unit backend set-hostname dev.appchat.cubby.bz
+cub function do --space appchat-dev --unit backend set-env-var CHAT_TITLE "AI Chat Dev"
+cub function do --space appchat-prod --unit frontend --unit backend set-hostname www.appchat.cubby.bz
+cub function do --space appchat-prod --unit backend set-env-var REGION NA
+cub function do --space appchat-prod --unit backend set-env-var ROLE prod
 
 for unit in db redis vote result ; do
-echo --- | cat example-voting-app/k8s-specifications/${unit}-deployment.yaml - example-voting-app/k8s-specifications/${unit}-service.yaml | cub unit create --space --label Application=appvote appvote-dev $unit -
+echo --- | cat example-voting-app/k8s-specifications/${unit}-deployment.yaml - example-voting-app/k8s-specifications/${unit}-service.yaml | cub unit create --space appvote-dev --label Application=appvote $unit -
+cub unit create --space appvote-prod --upstream-space appvote-dev --upstream-unit $unit $unit
 done
-cub unit create --space appvote-dev --label Application=appvote example-voting-app/k8s-specifications/worker-deployment.yaml
+cub unit create --space appvote-dev --label Application=appvote worker example-voting-app/k8s-specifications/worker-deployment.yaml
+cub unit create --space appvote-prod --upstream-space appvote-dev --upstream-unit worker worker
+# TODO: customize
 
 for file in apptique/kubernetes-manifests/*.yaml ; do
-cub unit create --space apptique-dev --label Application=apptique "$(basename -s .yaml $file)" $file
+unit="$(basename -s .yaml $file)"
+cub unit create --space apptique-dev --label Application=apptique $unit $file
+cub unit create --space apptique-prod --upstream-space apptique-dev --upstream-unit $unit $unit
 done
 fi
