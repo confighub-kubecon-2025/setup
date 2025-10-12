@@ -6,10 +6,6 @@
 # https://github.com/confighub-kubecon-2025/appchat
 # https://github.com/confighub-kubecon-2025/appvote
 # https://github.com/confighub-kubecon-2025/apptique
-#
-# Plain YAML
-# https://github.com/confighubai/cubbychat
-# https://github.com/dockersamples/example-voting-app
 
 # From Helm charts
 
@@ -39,10 +35,10 @@ cub space create apptique-dev
 cub space create apptique-prod
 
 if ! [[ -z "$CREATE_UNITS" ]] ; then
-cub unit create --space appchat-dev --label Application=appchat database cubbychat/database/postgres.yaml
-cub unit create --space appchat-dev --label Application=appchat backend cubbychat/backend/backend-no-ai.yaml
-cub unit create --space appchat-dev --label Application=appchat frontend cubbychat/frontend/frontend.yaml
-# TODO: Use a bulk clone
+# TODO: Namespaces
+cub unit create --space appchat-dev --label Application=appchat database appchat/base/postgres.yaml
+cub unit create --space appchat-dev --label Application=appchat backend appchat/base/backend.yaml
+cub unit create --space appchat-dev --label Application=appchat frontend appchat/base/frontend.yaml
 cub unit create --space appchat-prod --upstream-space appchat-dev --upstream-unit database database
 cub unit create --space appchat-prod --upstream-space appchat-dev --upstream-unit backend backend
 cub unit create --space appchat-prod --upstream-space appchat-dev --upstream-unit frontend frontend
@@ -51,18 +47,33 @@ cub function do --space appchat-dev --unit backend set-env-var CHAT_TITLE "AI Ch
 cub function do --space appchat-prod --unit frontend --unit backend set-hostname www.appchat.cubby.bz
 cub function do --space appchat-prod --unit backend set-env-var REGION NA
 cub function do --space appchat-prod --unit backend set-env-var ROLE prod
+cub function do --space appchat-dev ensure-namespace
+cub function do --space appchat-dev set-namespace appchat
+cub function do --space appchat-prod ensure-namespace
+cub function do --space appchat-prod set-namespace appchat
 
-for unit in db redis vote result ; do
-echo --- | cat example-voting-app/k8s-specifications/${unit}-deployment.yaml - example-voting-app/k8s-specifications/${unit}-service.yaml | cub unit create --space appvote-dev --label Application=appvote $unit -
+for unit in db redis vote result woker ; do
+cub unit create --space appvote-dev --label Application=appvote $unit appvote/base/${unit}.yaml
 cub unit create --space appvote-prod --upstream-space appvote-dev --upstream-unit $unit $unit
 done
-cub unit create --space appvote-dev --label Application=appvote worker example-voting-app/k8s-specifications/worker-deployment.yaml
-cub unit create --space appvote-prod --upstream-space appvote-dev --upstream-unit worker worker
-# TODO: customize
+cub function do --space appvote-dev --unit vote set-hostname dev-vote.appvote.cubby.bz
+cub function do --space appvote-dev --unit result set-hostname dev-result.appvote.cubby.bz
+cub function do --space appvote-prod --unit vote set-hostname vote.appvote.cubby.bz
+cub function do --space appvote-prod --unit result set-hostname result.appvote.cubby.bz
+cub function do --space appvote-dev ensure-namespace
+cub function do --space appvote-dev set-namespace appvote
+cub function do --space appvote-prod ensure-namespace
+cub function do --space appvote-prod set-namespace appvote
 
 for file in apptique/kubernetes-manifests/*.yaml ; do
 unit="$(basename -s .yaml $file)"
 cub unit create --space apptique-dev --label Application=apptique $unit $file
 cub unit create --space apptique-prod --upstream-space apptique-dev --upstream-unit $unit $unit
 done
+cub function do --space apptique-dev --unit frontend set-hostname dev.apptique.cubby.bz
+cub function do --space apptique-prod --unit frontend set-hostname www.apptique.cubby.bz
+cub function do --space apptique-dev ensure-namespace
+cub function do --space apptique-dev set-namespace apptique
+cub function do --space apptique-prod ensure-namespace
+cub function do --space apptique-prod set-namespace apptique
 fi
