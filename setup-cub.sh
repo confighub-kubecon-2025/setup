@@ -47,9 +47,9 @@ cub function do --space appchat-dev --unit backend set-env-var CHAT_TITLE "AI Ch
 cub function do --space appchat-prod --unit frontend --unit backend set-hostname www.appchat.cubby.bz
 cub function do --space appchat-prod --unit backend set-env-var REGION NA
 cub function do --space appchat-prod --unit backend set-env-var ROLE prod
-cub function do --space appchat-dev ensure-namespace
+cub function do --space appchat-dev ensure-namespaces
 cub function do --space appchat-dev set-namespace appchat
-cub function do --space appchat-prod ensure-namespace
+cub function do --space appchat-prod ensure-namespaces
 cub function do --space appchat-prod set-namespace appchat
 
 for unit in db redis vote result woker ; do
@@ -60,9 +60,9 @@ cub function do --space appvote-dev --unit vote set-hostname dev-vote.appvote.cu
 cub function do --space appvote-dev --unit result set-hostname dev-result.appvote.cubby.bz
 cub function do --space appvote-prod --unit vote set-hostname vote.appvote.cubby.bz
 cub function do --space appvote-prod --unit result set-hostname result.appvote.cubby.bz
-cub function do --space appvote-dev ensure-namespace
+cub function do --space appvote-dev ensure-namespaces
 cub function do --space appvote-dev set-namespace appvote
-cub function do --space appvote-prod ensure-namespace
+cub function do --space appvote-prod ensure-namespaces
 cub function do --space appvote-prod set-namespace appvote
 
 for file in apptique/kubernetes-manifests/*.yaml ; do
@@ -72,8 +72,8 @@ cub unit create --space apptique-prod --upstream-space apptique-dev --upstream-u
 done
 cub function do --space apptique-dev --unit frontend set-hostname dev.apptique.cubby.bz
 cub function do --space apptique-prod --unit frontend set-hostname www.apptique.cubby.bz
-cub function do --space apptique-dev ensure-namespace
+cub function do --space apptique-dev ensure-namespaces
 cub function do --space apptique-dev set-namespace apptique
-cub function do --space apptique-prod ensure-namespace
+cub function do --space apptique-prod ensure-namespaces
 cub function do --space apptique-prod set-namespace apptique
 fi
