@@ -1,6 +1,8 @@
 #!/bin/bash
 #Deprecated. Use setup-flux.sh
-cd ..
+
+# run from ..
+
 kind create cluster --name dev --config setup/dev-cluster.yaml 
 kubectl apply -f ../deploy-ingress-nginx.yaml
 kubectl create namespace appchat

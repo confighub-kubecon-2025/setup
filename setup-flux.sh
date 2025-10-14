@@ -10,7 +10,7 @@
 # 127.0.0.1	dev.apptique.cubby.bz
 # 127.0.0.1	www.apptique.cubby.bz
 
-cd ..
+# run from ..
 
 kind create cluster --name dev --config setup/dev-cluster.yaml 
 flux install

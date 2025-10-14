@@ -7,85 +7,87 @@
 # https://github.com/confighub-kubecon-2025/appvote
 # https://github.com/confighub-kubecon-2025/apptique
 
-CREATE_UNITS=1
-
-# From Helm charts
-
-cub space create --allow-exists appchat-helm-dev
-cub space create --allow-exists appchat-helm-prod
-cub space create --allow-exists appvote-helm-dev
-cub space create --allow-exists appvote-helm--prod
-cub space create --allow-exists apptique-helm-dev
-cub space create --allow-exists apptique-helm-prod
-
-if ! [[ -z "$CREATE_UNITS" ]] ; then
-cub helm install --space appchat-helm-dev appchat appchat --values appchat/values.yaml --values appchat/values-dev.yaml 
-cub helm install --space appchat-helm-prod appchat appchat --values appchat/values.yaml --values appchat/values-prod.yaml 
-cub helm install --space appvote-helm-dev appvote appvote --values appvote/values.yaml --values appvote/values-dev.yaml
-cub helm install --space appvote-helm-prod appvote appvote --values appvote/values.yaml --values appvote/values-prod.yaml
-cub helm install --space apptique-helm-dev apptique apptique/helm-chart --values apptique/helm-chart/values.yaml --values apptique/helm-chart/values-dev.yaml
-cub helm install --space apptique-helm-prod apptique apptique/helm-chart --values apptique/helm-chart/values.yaml --values apptique/helm-chart/values-prod.yaml
-fi
+# run from ..
 
 # From components
 
-cub space create --allow-exists appchat-dev
-cub space create --allow-exists appchat-prod
-cub space create --allow-exists appvote-dev
-cub space create --allow-exists appvote-prod
-cub space create --allow-exists apptique-dev
-cub space create --allow-exists apptique-prod
+##########################
+# appchat
+##########################
 
-if ! [[ -z "$CREATE_UNITS" ]] ; then
+# Create dev/base units and links
+cub space create --allow-exists appchat-dev
+
 cub unit create --space appchat-dev --label Application=appchat database appchat/base/postgres.yaml
 cub unit create --space appchat-dev --label Application=appchat backend appchat/base/backend.yaml
 cub unit create --space appchat-dev --label Application=appchat frontend appchat/base/frontend.yaml
+cub function do --space appchat-dev ensure-namespaces
+setup/kube-gen.sh namespace appchat | cub unit create --space appchat-dev --label Application=appchat appchat-ns -
+
 cub link create --space appchat-dev - frontend backend
 cub link create --space appchat-dev - backend database
-cub unit create --space appchat-prod --upstream-space appchat-dev --upstream-unit database database
-cub unit create --space appchat-prod --upstream-space appchat-dev --upstream-unit backend backend
-cub unit create --space appchat-prod --upstream-space appchat-dev --upstream-unit frontend frontend
-cub link create --space appchat-prod - frontend backend
-cub link create --space appchat-prod - backend database
+cub link create --space "*" --where-space "Slug = 'appchat-dev'" --where-from "Slug != 'appchat-ns'" --where-to "Slug = 'appchat-ns'"
+
+# Clone units and links to prod
+cub space create --allow-exists appchat-prod
+cub unit create --space appchat-dev --where-space "Slug = 'appchat-prod'"
+
+# TODO: create a base or set a base tag for merging
+
+# Customize dev and prod
+
 cub function do --space appchat-dev --unit frontend --unit backend set-hostname dev.appchat.cubby.bz
 cub function do --space appchat-dev --unit backend set-env-var backend CHAT_TITLE "AI Chat Dev"
+
 cub function do --space appchat-prod --unit frontend --unit backend set-hostname www.appchat.cubby.bz
 cub function do --space appchat-prod --unit backend set-env-var backend REGION NA
 cub function do --space appchat-prod --unit backend set-env-var backend ROLE prod
-cub function do --space appchat-dev ensure-namespaces
-cub function do --space appchat-dev set-namespace appchat
-cub function do --space appchat-prod ensure-namespaces
-cub function do --space appchat-prod set-namespace appchat
 
+##########################
+# appvote
+##########################
+
+# Create dev/base units and links
+cub space create --allow-exists appvote-dev
 for unit in db redis vote result worker ; do
 cub unit create --space appvote-dev --label Application=appvote $unit appvote/base/${unit}.yaml
-cub unit create --space appvote-prod --upstream-space appvote-dev --upstream-unit $unit $unit
 done
+cub function do --space appvote-dev ensure-namespaces
+setup/kube-gen.sh namespace appvote | cub unit create --space appvote-dev --label Application=appvote appvote-ns -
+
 cub link create --space appvote-dev - vote redis
 cub link create --space appvote-dev - worker redis
 cub link create --space appvote-dev - result db
 cub link create --space appvote-dev - worker db
-cub link create --space appvote-prod - vote redis
-cub link create --space appvote-prod - worker redis
-cub link create --space appvote-prod - result db
-cub link create --space appvote-prod - worker db
+cub link create --space "*" --where-space "Slug = 'appvote-dev'" --where-from "Slug != 'appvote-ns'" --where-to "Slug = 'appvote-ns'"
+
+# Clone units and links to prod
+cub space create --allow-exists appvote-prod
+cub unit create --space appvote-dev --where-space "Slug = 'appvote-prod'"
+
+# Customize dev and prod
+
 cub function do --space appvote-dev --unit vote set-hostname dev-vote.appvote.cubby.bz
 cub function do --space appvote-dev --unit result set-hostname dev-result.appvote.cubby.bz
+
 cub function do --space appvote-prod --unit vote set-hostname vote.appvote.cubby.bz
 cub function do --space appvote-prod --unit result set-hostname result.appvote.cubby.bz
-cub function do --space appvote-dev ensure-namespaces
-cub function do --space appvote-dev set-namespace appvote
-cub function do --space appvote-prod ensure-namespaces
-cub function do --space appvote-prod set-namespace appvote
 
+##########################
+# apptique
+##########################
+
+# Create dev/base units and links
+cub space create --allow-exists apptique-dev
 for file in apptique/kubernetes-manifests/*.yaml ; do
 unit="$(basename -s .yaml $file)"
 if [[ "$unit" != kustomization ]] ; then
 cub unit create --space apptique-dev --label Application=apptique $unit $file
-cub unit create --space apptique-prod --upstream-space apptique-dev --upstream-unit $unit $unit
 fi
 done
-# TODO: Link first, then bulk clone
+cub function do --space apptique-dev ensure-namespaces
+setup/kube-gen.sh namespace apptique | cub unit create --space apptique-dev --label Application=apptique apptique-ns -
+
 cub link create --space apptique-dev - loadgenerator frontend
 cub link create --space apptique-dev - frontend adservice
 cub link create --space apptique-dev - frontend recommendationservice
@@ -101,27 +103,14 @@ cub link create --space apptique-dev - checkoutservice shippingservice
 cub link create --space apptique-dev - checkoutservice currencyservice
 cub link create --space apptique-dev - checkoutservice paymentservice
 cub link create --space apptique-dev - checkoutservice emailservice
+cub link create --space "*" --where-space "Slug = 'apptique-dev'" --where-from "Slug != 'apptique-ns'" --where-to "Slug = 'apptique-ns'"
 
-cub link create --space apptique-prod - loadgenerator frontend
-cub link create --space apptique-prod - frontend adservice
-cub link create --space apptique-prod - frontend recommendationservice
-cub link create --space apptique-prod - frontend productcatalogservice
-cub link create --space apptique-prod - frontend cartservice
-cub link create --space apptique-prod - frontend shippingservice
-cub link create --space apptique-prod - frontend currencyservice
-cub link create --space apptique-prod - recommendationservice productcatalogservice
-cub link create --space apptique-prod - frontend checkoutservice
-cub link create --space apptique-prod - checkoutservice productcatalogservice
-cub link create --space apptique-prod - checkoutservice cartservice
-cub link create --space apptique-prod - checkoutservice shippingservice
-cub link create --space apptique-prod - checkoutservice currencyservice
-cub link create --space apptique-prod - checkoutservice paymentservice
-cub link create --space apptique-prod - checkoutservice emailservice
+# Clone units and links to prod
+cub space create --allow-exists apptique-prod
+cub unit create --space apptique-dev --where-space "Slug = 'apptique-prod'"
+
+# Customize dev and prod
 
 cub function do --space apptique-dev --unit frontend set-hostname dev.apptique.cubby.bz
+
 cub function do --space apptique-prod --unit frontend set-hostname www.apptique.cubby.bz
-cub function do --space apptique-dev ensure-namespaces
-cub function do --space apptique-dev set-namespace apptique
-cub function do --space apptique-prod ensure-namespaces
-cub function do --space apptique-prod set-namespace apptique
-fi
