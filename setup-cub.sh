@@ -40,9 +40,13 @@ if ! [[ -z "$CREATE_UNITS" ]] ; then
 cub unit create --space appchat-dev --label Application=appchat database appchat/base/postgres.yaml
 cub unit create --space appchat-dev --label Application=appchat backend appchat/base/backend.yaml
 cub unit create --space appchat-dev --label Application=appchat frontend appchat/base/frontend.yaml
+cub link create --space appchat-dev - frontend backend
+cub link create --space appchat-dev - backend database
 cub unit create --space appchat-prod --upstream-space appchat-dev --upstream-unit database database
 cub unit create --space appchat-prod --upstream-space appchat-dev --upstream-unit backend backend
 cub unit create --space appchat-prod --upstream-space appchat-dev --upstream-unit frontend frontend
+cub link create --space appchat-prod - frontend backend
+cub link create --space appchat-prod - backend database
 cub function do --space appchat-dev --unit frontend --unit backend set-hostname dev.appchat.cubby.bz
 cub function do --space appchat-dev --unit backend set-env-var backend CHAT_TITLE "AI Chat Dev"
 cub function do --space appchat-prod --unit frontend --unit backend set-hostname www.appchat.cubby.bz
@@ -57,6 +61,14 @@ for unit in db redis vote result worker ; do
 cub unit create --space appvote-dev --label Application=appvote $unit appvote/base/${unit}.yaml
 cub unit create --space appvote-prod --upstream-space appvote-dev --upstream-unit $unit $unit
 done
+cub link create --space appvote-dev - vote redis
+cub link create --space appvote-dev - worker redis
+cub link create --space appvote-dev - result db
+cub link create --space appvote-dev - worker db
+cub link create --space appvote-prod - vote redis
+cub link create --space appvote-prod - worker redis
+cub link create --space appvote-prod - result db
+cub link create --space appvote-prod - worker db
 cub function do --space appvote-dev --unit vote set-hostname dev-vote.appvote.cubby.bz
 cub function do --space appvote-dev --unit result set-hostname dev-result.appvote.cubby.bz
 cub function do --space appvote-prod --unit vote set-hostname vote.appvote.cubby.bz
@@ -73,6 +85,39 @@ cub unit create --space apptique-dev --label Application=apptique $unit $file
 cub unit create --space apptique-prod --upstream-space apptique-dev --upstream-unit $unit $unit
 fi
 done
+# TODO: Link first, then bulk clone
+cub link create --space apptique-dev - loadgenerator frontend
+cub link create --space apptique-dev - frontend adservice
+cub link create --space apptique-dev - frontend recommendationservice
+cub link create --space apptique-dev - frontend productcatalogservice
+cub link create --space apptique-dev - frontend cartservice
+cub link create --space apptique-dev - frontend shippingservice
+cub link create --space apptique-dev - frontend currencyservice
+cub link create --space apptique-dev - recommendationservice productcatalogservice
+cub link create --space apptique-dev - frontend checkoutservice
+cub link create --space apptique-dev - checkoutservice productcatalogservice
+cub link create --space apptique-dev - checkoutservice cartservice
+cub link create --space apptique-dev - checkoutservice shippingservice
+cub link create --space apptique-dev - checkoutservice currencyservice
+cub link create --space apptique-dev - checkoutservice paymentservice
+cub link create --space apptique-dev - checkoutservice emailservice
+
+cub link create --space apptique-prod - loadgenerator frontend
+cub link create --space apptique-prod - frontend adservice
+cub link create --space apptique-prod - frontend recommendationservice
+cub link create --space apptique-prod - frontend productcatalogservice
+cub link create --space apptique-prod - frontend cartservice
+cub link create --space apptique-prod - frontend shippingservice
+cub link create --space apptique-prod - frontend currencyservice
+cub link create --space apptique-prod - recommendationservice productcatalogservice
+cub link create --space apptique-prod - frontend checkoutservice
+cub link create --space apptique-prod - checkoutservice productcatalogservice
+cub link create --space apptique-prod - checkoutservice cartservice
+cub link create --space apptique-prod - checkoutservice shippingservice
+cub link create --space apptique-prod - checkoutservice currencyservice
+cub link create --space apptique-prod - checkoutservice paymentservice
+cub link create --space apptique-prod - checkoutservice emailservice
+
 cub function do --space apptique-dev --unit frontend set-hostname dev.apptique.cubby.bz
 cub function do --space apptique-prod --unit frontend set-hostname www.apptique.cubby.bz
 cub function do --space apptique-dev ensure-namespaces
