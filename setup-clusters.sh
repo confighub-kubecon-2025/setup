@@ -12,13 +12,23 @@
 
 # run from ..
 
-kind create cluster --name dev --config setup/dev-cluster.yaml 
+kind create cluster --name dev --config setup/dev-cluster.yaml --kubeconfig dev.kubeconfig
+export KUBECONFIG=dev.kubeconfig
 flux install
 #https://kind.sigs.k8s.io/docs/user/ingress
 kubectl apply -f setup/deploy-ingress-nginx.yaml
 #kubectl apply -f https://kind.sigs.k8s.io/examples/ingress/deploy-ingress-nginx.yaml
+cub space create --allow-exists platform-dev
+cub worker create cluster-worker --space platform-dev --allow-exists
+cub worker install cluster-worker --space platform-dev --env IN_CLUSTER_TARGET_NAME=dev-cluster --export --include-secret | kubectl apply -f -
 
-kind create cluster --name prod --config setup/prod-cluster.yaml 
+kind create cluster --name prod --config setup/prod-cluster.yaml --kubeconfig prod.kubeconfig
+export KUBECONFIG=prod.kubeconfig
 flux install
 kubectl apply -f setup/deploy-ingress-nginx.yaml
 #kubectl apply -f https://kind.sigs.k8s.io/examples/ingress/deploy-ingress-nginx.yaml
+cub space create --allow-exists platform-prod
+cub worker create cluster-worker --space platform-prod --allow-exists
+cub worker install cluster-worker --space platform-prod --env IN_CLUSTER_TARGET_NAME=prod-cluster --export --include-secret | kubectl apply -f -
+
+# NOTE: to upload the worker config (without the secret) to ConfigHub, use --unit
