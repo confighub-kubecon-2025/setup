@@ -7,14 +7,16 @@
 # https://github.com/confighub-kubecon-2025/appvote
 # https://github.com/confighub-kubecon-2025/apptique
 
+CREATE_UNITS=1
+
 # From Helm charts
 
-cub space create appchat-helm-dev
-cub space create appchat-helm-prod
-cub space create appvote-helm-dev
-cub space create appvote-helm--prod
-cub space create apptique-helm-dev
-cub space create apptique-helm-prod
+cub space create --allow-exists appchat-helm-dev
+cub space create --allow-exists appchat-helm-prod
+cub space create --allow-exists appvote-helm-dev
+cub space create --allow-exists appvote-helm--prod
+cub space create --allow-exists apptique-helm-dev
+cub space create --allow-exists apptique-helm-prod
 
 if ! [[ -z "$CREATE_UNITS" ]] ; then
 cub helm install --space appchat-helm-dev appchat appchat --values appchat/values.yaml --values appchat/values-dev.yaml 
@@ -27,15 +29,14 @@ fi
 
 # From components
 
-cub space create appchat-dev
-cub space create appchat-prod
-cub space create appvote-dev
-cub space create appvote-prod
-cub space create apptique-dev
-cub space create apptique-prod
+cub space create --allow-exists appchat-dev
+cub space create --allow-exists appchat-prod
+cub space create --allow-exists appvote-dev
+cub space create --allow-exists appvote-prod
+cub space create --allow-exists apptique-dev
+cub space create --allow-exists apptique-prod
 
 if ! [[ -z "$CREATE_UNITS" ]] ; then
-# TODO: Namespaces
 cub unit create --space appchat-dev --label Application=appchat database appchat/base/postgres.yaml
 cub unit create --space appchat-dev --label Application=appchat backend appchat/base/backend.yaml
 cub unit create --space appchat-dev --label Application=appchat frontend appchat/base/frontend.yaml
@@ -43,16 +44,16 @@ cub unit create --space appchat-prod --upstream-space appchat-dev --upstream-uni
 cub unit create --space appchat-prod --upstream-space appchat-dev --upstream-unit backend backend
 cub unit create --space appchat-prod --upstream-space appchat-dev --upstream-unit frontend frontend
 cub function do --space appchat-dev --unit frontend --unit backend set-hostname dev.appchat.cubby.bz
-cub function do --space appchat-dev --unit backend set-env-var CHAT_TITLE "AI Chat Dev"
+cub function do --space appchat-dev --unit backend set-env-var backend CHAT_TITLE "AI Chat Dev"
 cub function do --space appchat-prod --unit frontend --unit backend set-hostname www.appchat.cubby.bz
-cub function do --space appchat-prod --unit backend set-env-var REGION NA
-cub function do --space appchat-prod --unit backend set-env-var ROLE prod
+cub function do --space appchat-prod --unit backend set-env-var backend REGION NA
+cub function do --space appchat-prod --unit backend set-env-var backend ROLE prod
 cub function do --space appchat-dev ensure-namespaces
 cub function do --space appchat-dev set-namespace appchat
 cub function do --space appchat-prod ensure-namespaces
 cub function do --space appchat-prod set-namespace appchat
 
-for unit in db redis vote result woker ; do
+for unit in db redis vote result worker ; do
 cub unit create --space appvote-dev --label Application=appvote $unit appvote/base/${unit}.yaml
 cub unit create --space appvote-prod --upstream-space appvote-dev --upstream-unit $unit $unit
 done
@@ -67,8 +68,10 @@ cub function do --space appvote-prod set-namespace appvote
 
 for file in apptique/kubernetes-manifests/*.yaml ; do
 unit="$(basename -s .yaml $file)"
+if [[ "$unit" != kustomization ]] ; then
 cub unit create --space apptique-dev --label Application=apptique $unit $file
 cub unit create --space apptique-prod --upstream-space apptique-dev --upstream-unit $unit $unit
+fi
 done
 cub function do --space apptique-dev --unit frontend set-hostname dev.apptique.cubby.bz
 cub function do --space apptique-prod --unit frontend set-hostname www.apptique.cubby.bz
