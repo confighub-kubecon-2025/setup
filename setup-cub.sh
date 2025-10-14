@@ -121,3 +121,10 @@ cub function do --space apptique-prod --unit frontend set-hostname www.apptique.
 
 cub unit set-target --space "*" --where "Space.Labels.Environment = 'dev'" platform-dev/dev-cluster
 cub unit set-target --space "*" --where "Space.Labels.Environment = 'prod'" platform-prod/prod-cluster
+
+##########################
+# Apply all the units
+##########################
+
+cub unit approve --space "*" --where "Labels.Application LIKE 'app%'"
+cub unit apply --space "*" --where "Labels.Application LIKE 'app%'"
