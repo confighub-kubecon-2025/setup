@@ -16,7 +16,7 @@
 ##########################
 
 # Create dev/base units and links
-cub space create --allow-exists appchat-dev --label Environment=dev
+cub space create --allow-exists appchat-dev --label Environment=dev --where-trigger "Space.Slug = 'default'"
 
 cub unit create --space appchat-dev --label Application=appchat database appchat/base/postgres.yaml
 cub unit create --space appchat-dev --label Application=appchat backend appchat/base/backend.yaml
@@ -29,7 +29,7 @@ cub link create --space appchat-dev - backend database
 cub link create --space "*" --where-space "Slug = 'appchat-dev'" --where-from "Slug != 'appchat-ns'" --where-to "Slug = 'appchat-ns'"
 
 # Clone units and links to prod
-cub space create --allow-exists appchat-prod --label Environment=prod
+cub space create --allow-exists appchat-prod --label Environment=prod --where-trigger "Space.Slug = 'default'"
 cub unit create --space appchat-dev --where-space "Slug = 'appchat-prod'"
 
 # TODO: create a base or set a base tag for merging
@@ -48,7 +48,7 @@ cub function do --space appchat-prod --unit backend set-env-var backend ROLE pro
 ##########################
 
 # Create dev/base units and links
-cub space create --allow-exists appvote-dev --label Environment=dev
+cub space create --allow-exists appvote-dev --label Environment=dev --where-trigger "Space.Slug = 'default'"
 for unit in db redis vote result worker ; do
 cub unit create --space appvote-dev --label Application=appvote $unit appvote/base/${unit}.yaml
 done
@@ -62,7 +62,7 @@ cub link create --space appvote-dev - worker db
 cub link create --space "*" --where-space "Slug = 'appvote-dev'" --where-from "Slug != 'appvote-ns'" --where-to "Slug = 'appvote-ns'"
 
 # Clone units and links to prod
-cub space create --allow-exists appvote-prod --label Environment=prod
+cub space create --allow-exists appvote-prod --label Environment=prod --where-trigger "Space.Slug = 'default'"
 cub unit create --space appvote-dev --where-space "Slug = 'appvote-prod'"
 
 # Customize dev and prod
@@ -78,7 +78,7 @@ cub function do --space appvote-prod --unit result set-hostname result.appvote.c
 ##########################
 
 # Create dev/base units and links
-cub space create --allow-exists apptique-dev --label Environment=dev
+cub space create --allow-exists apptique-dev --label Environment=dev --where-trigger "Space.Slug = 'default'"
 for file in apptique/kubernetes-manifests/*.yaml ; do
 unit="$(basename -s .yaml $file)"
 if [[ "$unit" != kustomization ]] ; then
@@ -106,7 +106,7 @@ cub link create --space apptique-dev - checkoutservice emailservice
 cub link create --space "*" --where-space "Slug = 'apptique-dev'" --where-from "Slug != 'apptique-ns'" --where-to "Slug = 'apptique-ns'"
 
 # Clone units and links to prod
-cub space create --allow-exists apptique-prod --label Environment=prod
+cub space create --allow-exists apptique-prod --label Environment=prod --where-trigger "Space.Slug = 'default'"
 cub unit create --space apptique-dev --where-space "Slug = 'apptique-prod'"
 
 # Customize dev and prod
