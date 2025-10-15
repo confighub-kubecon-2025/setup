@@ -45,3 +45,9 @@ You should then be able to access the instances at:
   - http://www.appvote.cubby.bz:12080/
   - http://results.appvote.cubby.bz:12080/
   - http://www.apptique.cubby.bz:12080/
+
+Alternative ways to run the applications:
+
+- To import helm charts, use setup-cubhelm.sh instead.
+- To run with Flux, use setup-flux.sh instead.
+- To run with just Helm, use setup-helm.sh instead.
