@@ -13,7 +13,7 @@
 # run from ..
 
 # Triggers
-cub trigger create --space default --allow-exists valid-k8s Mutation vet-schemas
+cub trigger create --space default --allow-exists valid-k8s Mutation Kubernetes/YAML vet-schemas
 cub trigger create --space default --allow-exists complete-k8s Mutation Kubernetes/YAML vet-placeholders
 cub trigger create --space default --allow-exists context-k8s Mutation Kubernetes/YAML ensure-context true
 
