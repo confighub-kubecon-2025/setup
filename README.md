@@ -5,8 +5,8 @@ Prerequisites:
 - cub
 - kubectl
 - kind
-- helm
 - flux
+- helm (if using setup-helm.sh)
 
 Setup:
 
