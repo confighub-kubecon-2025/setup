@@ -130,7 +130,11 @@ cub unit set-target --space "*" --where "Space.Labels.Environment = 'prod'" plat
 ##########################
 
 cub unit approve --space "*" --where "Labels.Application LIKE 'app%'"
+
+# TODO
+if false ; then
 #cub unit apply --space "*" --where "Labels.Application LIKE 'app%'"
 cub unit apply --space "*" --where "Labels.Application = 'appchat'"
 cub unit apply --space "*" --where "Labels.Application = 'appvote'"
 cub unit apply --space "*" --where "Labels.Application = 'apptique'"
+fi
