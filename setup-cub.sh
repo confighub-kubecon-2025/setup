@@ -70,10 +70,10 @@ cub unit create --space appvote-dev --where-space "Slug = 'appvote-prod'"
 # Customize dev and prod
 
 cub function do --space appvote-dev --unit vote set-hostname dev-vote.appvote.cubby.bz
-cub function do --space appvote-dev --unit result set-hostname dev-result.appvote.cubby.bz
+cub function do --space appvote-dev --unit result set-hostname dev-results.appvote.cubby.bz
 
-cub function do --space appvote-prod --unit vote set-hostname vote.appvote.cubby.bz
-cub function do --space appvote-prod --unit result set-hostname result.appvote.cubby.bz
+cub function do --space appvote-prod --unit vote set-hostname www.appvote.cubby.bz
+cub function do --space appvote-prod --unit result set-hostname results.appvote.cubby.bz
 
 ##########################
 # apptique
@@ -83,7 +83,7 @@ cub function do --space appvote-prod --unit result set-hostname result.appvote.c
 cub space create --allow-exists apptique-dev --label Environment=dev --where-trigger "SpaceID = '$defaultSpaceID'"
 for file in apptique/kubernetes-manifests/*.yaml ; do
 unit="$(basename -s .yaml $file)"
-if [[ "$unit" != kustomization ]] ; then
+if [[ "$unit" != kustomization ]] && [[ "$unit" != loadgenerator ]] ; then
 cub unit create --space apptique-dev --label Application=apptique $unit $file
 # Set to pre-built image
 cub function do --space apptique-dev --unit $unit set-image server "us-central1-docker.pkg.dev/google-samples/microservices-demo/${unit}:v0.10.3"
@@ -92,7 +92,7 @@ done
 cub function do --space apptique-dev ensure-namespaces
 setup/kube-gen.sh namespace apptique | cub unit create --space apptique-dev --label Application=apptique apptique-ns -
 
-cub link create --space apptique-dev - loadgenerator frontend
+#cub link create --space apptique-dev - loadgenerator frontend
 cub link create --space apptique-dev - frontend adservice
 cub link create --space apptique-dev - frontend recommendationservice
 cub link create --space apptique-dev - frontend productcatalogservice
@@ -135,7 +135,10 @@ cub unit approve --space "*" --where "Labels.Application LIKE 'app%'"
 # TODO
 if false ; then
 #cub unit apply --space "*" --where "Labels.Application LIKE 'app%'"
-cub unit apply --space "*" --where "Labels.Application = 'appchat'"
-cub unit apply --space "*" --where "Labels.Application = 'appvote'"
-cub unit apply --space "*" --where "Labels.Application = 'apptique'"
+cub unit apply --space appchat-dev
+cub unit apply --space appvote-dev
+cub unit apply --space apptique-dev
+cub unit apply --space appchat-prod
+cub unit apply --space appvote-prod
+cub unit apply --space apptique-prod
 fi
