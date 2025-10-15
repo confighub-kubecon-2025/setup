@@ -1,15 +1,5 @@
 #!/bin/bash
 
-# Add the following to /etc/hosts
-# 127.0.0.1	dev.appchat.cubby.bz
-# 127.0.0.1	www.appchat.cubby.bz
-# 127.0.0.1	dev-vote.appvote.cubby.bz
-# 127.0.0.1	dev-results.appvote.cubby.bz
-# 127.0.0.1	www.appvote.cubby.bz
-# 127.0.0.1	results.appvote.cubby.bz
-# 127.0.0.1	dev.apptique.cubby.bz
-# 127.0.0.1	www.apptique.cubby.bz
-
 # run from ..
 
 # Triggers
