@@ -10,4 +10,4 @@ helm install appchat appchat --values appchat/values.yaml --values appchat/value
 kubectl create namespace appvote
 helm install appvote appvote --values appvote/values.yaml -n appvote
 kubectl create namespace apptique
-helm install apptique aptique/helm-chart --values apptique/helm-chart/values.yaml --values apptique/helm-chart/values-dev.yaml -n apptique
+helm install apptique apptique/helm-chart --values apptique/helm-chart/values.yaml --values apptique/helm-chart/values-dev.yaml -n apptique
