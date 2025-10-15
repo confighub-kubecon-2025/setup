@@ -85,7 +85,8 @@ for file in apptique/kubernetes-manifests/*.yaml ; do
 unit="$(basename -s .yaml $file)"
 if [[ "$unit" != kustomization ]] ; then
 cub unit create --space apptique-dev --label Application=apptique $unit $file
-cub function do --space apptique-dev --unit $unit set-image server "us-central1-docker.pkg.dev/google-samples/microservices-demo/$unit"
+# Set to pre-built image
+cub function do --space apptique-dev --unit $unit set-image server "us-central1-docker.pkg.dev/google-samples/microservices-demo/${unit}:v0.10.3"
 fi
 done
 cub function do --space apptique-dev ensure-namespaces
