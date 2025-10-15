@@ -13,6 +13,7 @@ cub filter create --space default --allow-exists unapplied-changes Unit --where-
 cub filter create --space default --allow-exists not-approved Unit --where-field "HeadRevisionNum > LiveRevisionNum AND LEN(ApprovedBy) = 0"
 cub filter create --space default --allow-exists has-apply-gates Unit --where-field "LEN(ApplyGates) > 0"
 cub filter create --space default --allow-exists run-as-root Unit --where-field "ToolchainType = 'Kubernetes/YAML'" --resource-type "apps/v1/Deployment" --where-data "spec.template.spec.containers.*.|securityContext.runAsNonRoot != true"
+cub filter create --space default --allow-exists kubernetes Unit --where-field "ToolchainType = 'Kubernetes/YAML'"
 
 # Dev cluster
 kind create cluster --name dev --config setup/dev-cluster.yaml --kubeconfig dev.kubeconfig
