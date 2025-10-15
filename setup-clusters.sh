@@ -21,7 +21,7 @@ flux install
 #https://kind.sigs.k8s.io/docs/user/ingress
 kubectl apply -f setup/deploy-ingress-nginx.yaml
 #kubectl apply -f https://kind.sigs.k8s.io/examples/ingress/deploy-ingress-nginx.yaml
-cub space create --allow-exists platform-dev
+cub space create --allow-exists platform-dev --label Environment=dev
 cub worker create cluster-worker --space platform-dev --allow-exists
 cub worker install cluster-worker --space platform-dev --env IN_CLUSTER_TARGET_NAME=dev-cluster --export --include-secret | kubectl apply -f -
 
@@ -31,7 +31,7 @@ export KUBECONFIG=prod.kubeconfig
 flux install
 kubectl apply -f setup/deploy-ingress-nginx.yaml
 #kubectl apply -f https://kind.sigs.k8s.io/examples/ingress/deploy-ingress-nginx.yaml
-cub space create --allow-exists platform-prod
+cub space create --allow-exists platform-prod --label Environment=prod
 cub worker create cluster-worker --space platform-prod --allow-exists
 cub worker install cluster-worker --space platform-prod --env IN_CLUSTER_TARGET_NAME=prod-cluster --export --include-secret | kubectl apply -f -
 
