@@ -140,4 +140,9 @@ cub unit apply --space apptique-dev
 cub unit apply --space appchat-prod
 cub unit apply --space appvote-prod
 cub unit apply --space apptique-prod
+cub tag create --space default post-initial-apply
+cub unit tag --space "*" --where "Labels.Application LIKE 'app%'" --revision HeadRevisionNum default/post-initial-apply
+cub unit refresh --space "*" --where "Labels.Application LIKE 'app%'"
+cub tag create --space default post-refresh
+cub unit tag --space "*" --where "Labels.Application LIKE 'app%'" --revision HeadRevisionNum default/post-refresh
 fi
