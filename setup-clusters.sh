@@ -7,7 +7,7 @@ cub trigger create --space default --allow-exists valid-k8s Mutation Kubernetes/
 cub trigger create --space default --allow-exists complete-k8s Mutation Kubernetes/YAML vet-placeholders
 cub trigger create --space default --allow-exists context-k8s Mutation Kubernetes/YAML ensure-context true
 # Disable this trigger initially so that it doesn't block the initial apply
-cub trigger create --space default --allow-exists --disable ensure-nonroot Mutation Kubernetes/YAML vet-celexpr "r.kind != 'Deployment' || (r.spec.template.spec.securityContext.runAsNonRoot == true && r.spec.template.spec.containers.all(container, container.securityContext.runAsNonRoot != false)) || r.spec.template.spec.containers.all(container, container.securityContext.runAsNonRoot == true)"
+cub trigger create --space default --allow-exists --disable ensure-nonroot Mutation Kubernetes/YAML vet-celexpr "r.kind != 'Deployment' || (r.spec.template.spec.securityContext.runAsNonRoot == true && r.spec.template.spec.containers.all(container, !has(container.securityContext.runAsNonRoot) || container.securityContext.runAsNonRoot == true)) || r.spec.template.spec.containers.all(container, has(container.securityContext.runAsNonRoot) && container.securityContext.runAsNonRoot == true)"
 
 # Filters
 cub filter create --space default --allow-exists apply-not-completed Unit --where-field "LastAppliedRevisionNum != LiveRevisionNum"
