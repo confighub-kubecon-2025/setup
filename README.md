@@ -17,7 +17,7 @@ git clone https://github.com/confighub-kubecon-2025/appvote
 git clone https://github.com/confighub-kubecon-2025/apptique
 setup/setup-clusters.sh
 sleep 30
-CUB_APPLY=1 setup/setup-cub.sh
+setup/setup-cub.sh
 ```
 
 Add the following hosts to /etc/hosts:

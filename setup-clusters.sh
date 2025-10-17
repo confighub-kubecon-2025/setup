@@ -2,20 +2,22 @@
 
 # run from ..
 
+cub space create home
+
 # Triggers
-cub trigger create --space default --allow-exists valid-k8s Mutation Kubernetes/YAML vet-schemas
-cub trigger create --space default --allow-exists complete-k8s Mutation Kubernetes/YAML vet-placeholders
-cub trigger create --space default --allow-exists context-k8s Mutation Kubernetes/YAML ensure-context true
+cub trigger create --space home --allow-exists valid-k8s Mutation Kubernetes/YAML vet-schemas
+cub trigger create --space home --allow-exists complete-k8s Mutation Kubernetes/YAML vet-placeholders
+cub trigger create --space home --allow-exists context-k8s Mutation Kubernetes/YAML ensure-context true
 # Disable this trigger initially so that it doesn't block the initial apply
-cub trigger create --space default --allow-exists --disable ensure-nonroot Mutation Kubernetes/YAML vet-celexpr "r.kind != 'Deployment' || (r.spec.template.spec.securityContext.runAsNonRoot == true && r.spec.template.spec.containers.all(container, !has(container.securityContext.runAsNonRoot) || container.securityContext.runAsNonRoot == true)) || r.spec.template.spec.containers.all(container, has(container.securityContext.runAsNonRoot) && container.securityContext.runAsNonRoot == true)"
+cub trigger create --space home --allow-exists --disable ensure-nonroot Mutation Kubernetes/YAML vet-celexpr "r.kind != 'Deployment' || (r.spec.template.spec.securityContext.runAsNonRoot == true && r.spec.template.spec.containers.all(container, !has(container.securityContext.runAsNonRoot) || container.securityContext.runAsNonRoot == true)) || r.spec.template.spec.containers.all(container, has(container.securityContext.runAsNonRoot) && container.securityContext.runAsNonRoot == true)"
 
 # Filters
-cub filter create --space default --allow-exists apply-not-completed Unit --where-field "LastAppliedRevisionNum != LiveRevisionNum"
-cub filter create --space default --allow-exists unapplied-changes Unit --where-field "HeadRevisionNum > LiveRevisionNum AND TargetID IS NOT NULL"
-cub filter create --space default --allow-exists not-approved Unit --where-field "HeadRevisionNum > LiveRevisionNum AND LEN(ApprovedBy) = 0"
-cub filter create --space default --allow-exists has-apply-gates Unit --where-field "LEN(ApplyGates) > 0"
-cub filter create --space default --allow-exists run-as-root Unit --where-field "ToolchainType = 'Kubernetes/YAML'" --resource-type "apps/v1/Deployment" --where-data "spec.template.spec.|securityContext.runAsNonRoot != true AND spec.template.spec.containers.*.|securityContext.runAsNonRoot != true"
-cub filter create --space default --allow-exists kubernetes Unit --where-field "ToolchainType = 'Kubernetes/YAML'"
+cub filter create --space home --allow-exists apply-not-completed Unit --where-field "LastAppliedRevisionNum != LiveRevisionNum"
+cub filter create --space home --allow-exists unapplied-changes Unit --where-field "HeadRevisionNum > LiveRevisionNum AND TargetID IS NOT NULL"
+cub filter create --space home --allow-exists not-approved Unit --where-field "HeadRevisionNum > LiveRevisionNum AND LEN(ApprovedBy) = 0"
+cub filter create --space home --allow-exists has-apply-gates Unit --where-field "LEN(ApplyGates) > 0"
+cub filter create --space home --allow-exists run-as-root Unit --where-field "ToolchainType = 'Kubernetes/YAML'" --resource-type "apps/v1/Deployment" --where-data "spec.template.spec.|securityContext.runAsNonRoot != true AND spec.template.spec.containers.*.|securityContext.runAsNonRoot != true"
+cub filter create --space home --allow-exists kubernetes Unit --where-field "ToolchainType = 'Kubernetes/YAML'"
 
 # Dev cluster
 kind create cluster --name dev --config setup/dev-cluster.yaml --kubeconfig dev.kubeconfig
