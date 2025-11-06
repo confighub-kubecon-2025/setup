@@ -52,7 +52,7 @@ Some operations you can try on these applications in ConfigHub:
 - Navigate from a unit to the UI: `cub k8s source --kubeconfig prod.kubeconfig Deployment backend -n appchat`
 - Change resources: `cub function invoke --space appchat-prod --unit backend set-container-resources backend floor 100m 200Mi 2`
 - Change an environment variable: `cub function invoke --space appchat-prod --unit backend set-env-var backend EXPERIMENTAL_FEATURE false`
-- Set security context to best-practice values: `cub function invoke --space appchat-prod --unit backend set-pod-defaults –security-context=true`
+- Set security context to best-practice values: `cub function invoke --space appchat-prod --unit backend -- set-pod-defaults –security-context=true`
 - Break glass and then refresh the config in ConfigHub:
   ```
   kubectl --kubeconfig prod.kubeconfig edit deploy -n apptique paymentservice
