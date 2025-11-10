@@ -2,7 +2,7 @@
 
 # run from ..
 
-cub space create home
+cub space create --allow-exists home
 
 # Triggers
 cub trigger create --space home --allow-exists valid-k8s Mutation Kubernetes/YAML vet-schemas
