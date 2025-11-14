@@ -2,7 +2,8 @@
 
 Prerequisites:
 
-- cub
+- ConfigHub account ([signup](https://auth.confighub.com/sign-up))
+- cub ([install](https://docs.confighub.com/get-started/setup/#install-the-cli))
 - kubectl
 - kind
 - flux
