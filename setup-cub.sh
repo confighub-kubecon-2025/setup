@@ -132,13 +132,13 @@ cub unit set-target --space "*" --where "Space.Labels.Environment = 'prod'" plat
 
 cub unit approve --space "*" --where "Labels.Application LIKE 'app%'"
 
-#cub unit apply --space "*" --where "Labels.Application LIKE 'app%'"
-cub unit apply --space appchat-dev
-cub unit apply --space appvote-dev
-cub unit apply --space apptique-dev
-cub unit apply --space appchat-prod
-cub unit apply --space appvote-prod
-cub unit apply --space apptique-prod
+#cub unit apply --wait --space "*" --where "Labels.Application LIKE 'app%'"
+cub unit apply --wait --space appchat-dev
+cub unit apply --wait --space appvote-dev
+cub unit apply --wait --space apptique-dev
+cub unit apply --wait --space appchat-prod
+cub unit apply --wait --space appvote-prod
+cub unit apply --wait --space apptique-prod
 cub tag create --space home post-initial-apply
 cub unit tag --space "*" --where "Labels.Application LIKE 'app%'" --revision HeadRevisionNum home/post-initial-apply
 cub unit refresh --space "*" --where "Labels.Application LIKE 'app%'"
