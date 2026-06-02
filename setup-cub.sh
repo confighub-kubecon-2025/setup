@@ -6,118 +6,149 @@
 # https://github.com/confighub-kubecon-2025/appchat
 # https://github.com/confighub-kubecon-2025/appvote
 # https://github.com/confighub-kubecon-2025/apptique
+#
+# run from .. (the kubecon directory), after setup/setup-clusters.sh has created
+# the home space (triggers/filters), the platform-dev/platform-prod spaces, and
+# the dev-cluster/prod-cluster targets.
+#
+# This version uses `cub variant upload` + `cub variant create`:
+#   - Each application is uploaded once as a "base" variant from its rendered
+#     manifests (one Unit per resource), in the confighubplaceholder namespace
+#     and with no target.
+#   - `cub variant create` clones a "dev" and a "prod" variant from each base,
+#     each with `--namespace <app>` (set-namespace resolves the placeholder) and
+#     `--environment dev|prod` (for target selection).
+#   - Per-variant customizations (hostnames, env vars) are applied afterwards;
+#     base-wide customizations (apptique images) are applied to the base before
+#     cloning so both variants inherit them.
+#
+# Intra-space links (Service->Deployment selectors, namespace links, and
+# ServiceAccount references) are inferred by `cub variant upload`. The previous
+# hand-authored cross-component links (frontend->backend, etc.) are not inferable
+# from the manifests; add them back with `cub link create` if the demo needs that
+# topology in the graph.
 
-# run from ..
+set -e
 
-# From components
+homeSpaceID="$(cub space get home -o jq='.Space.SpaceID')"
 
-homeSpaceID="$(cub space get home --jq '.Space.SpaceID')"
+PATTERN="template:{{.Labels.Component}}-{{.Labels.Variant}}"
+
+# uploadBase <app> <manifest-file...> : upload the rendered manifests as the
+# app's base variant and wire it to the home-space triggers so the dev/prod
+# clones inherit them.
+function uploadBase {
+    local app="$1"; shift
+    cub variant upload \
+        --component "$app" --variant base \
+        --space-pattern "$PATTERN" \
+        --granularity per-resource \
+        --namespace confighubplaceholder \
+        --label "Application=${app}" \
+        "$@"
+    cub space update "${app}-base" --where-trigger "SpaceID = '${homeSpaceID}'"
+}
+
+# cloneVariants <app> : clone dev and prod variants from the app's base. Each
+# variant gets its real namespace (set-namespace replaces confighubplaceholder)
+# and an Environment label used to attach the cluster target.
+function cloneVariants {
+    local app="$1"
+    cub variant create dev  "${app}-base" --space-pattern "$PATTERN" --environment dev  --namespace "$app"
+    cub variant create prod "${app}-base" --space-pattern "$PATTERN" --environment prod --namespace "$app"
+}
+
+# clink <app> <from-unit> <to-unit> : create a cross-component (network)
+# dependency link on the app's base space. These express that a consuming
+# Deployment talks to a provider's Service; they are not inferable from the
+# manifests (no Kubernetes reference between them). cub variant create clones
+# them into the dev/prod variants.
+function clink {
+    cub link create --space "${1}-base" - "$2" "$3"
+}
 
 ##########################
 # appchat
 ##########################
 
-# Create dev/base units and links
-cub space create --allow-exists appchat-dev --label Environment=dev --where-trigger "SpaceID = '$homeSpaceID'"
+uploadBase appchat appchat/base/postgres.yaml appchat/base/backend.yaml appchat/base/frontend.yaml
 
-cub unit create --space appchat-dev --label Application=appchat database appchat/base/postgres.yaml
-cub unit create --space appchat-dev --label Application=appchat backend appchat/base/backend.yaml
-cub unit create --space appchat-dev --label Application=appchat frontend appchat/base/frontend.yaml
-cub function do --space appchat-dev ensure-namespaces
-setup/kube-gen.sh namespace appchat | cub unit create --space appchat-dev --label Application=appchat appchat-ns -
+clink appchat deployment-frontend service-backend
+clink appchat deployment-backend  service-postgres
 
-cub link create --space appchat-dev - frontend backend
-cub link create --space appchat-dev - backend database
-cub link create --space "*" --where-space "Slug = 'appchat-dev'" --where-from "Slug != 'appchat-ns'" --where-to "Slug = 'appchat-ns'"
-
-# Clone units and links to prod
-cub space create --allow-exists appchat-prod --label Environment=prod --where-trigger "SpaceID = '$homeSpaceID'"
-cub unit create --space appchat-dev --where-space "Slug = 'appchat-prod'"
-
-# TODO: create a base or set a base tag for merging
+cloneVariants appchat
 
 # Customize dev and prod
+cub function do --space appchat-dev --unit ingress-frontend-ingress --unit ingress-backend-ingress set-hostname dev.appchat.cubby.bz
+cub function do --space appchat-dev --unit deployment-backend set-env-var backend CHAT_TITLE "AI Chat Dev"
 
-cub function do --space appchat-dev --unit frontend --unit backend set-hostname dev.appchat.cubby.bz
-cub function do --space appchat-dev --unit backend set-env-var backend CHAT_TITLE "AI Chat Dev"
-
-cub function do --space appchat-prod --unit frontend --unit backend set-hostname www.appchat.cubby.bz
-cub function do --space appchat-prod --unit backend set-env-var backend REGION NA
-cub function do --space appchat-prod --unit backend set-env-var backend ROLE prod
+cub function do --space appchat-prod --unit ingress-frontend-ingress --unit ingress-backend-ingress set-hostname www.appchat.cubby.bz
+cub function do --space appchat-prod --unit deployment-backend set-env-var backend REGION NA
+cub function do --space appchat-prod --unit deployment-backend set-env-var backend ROLE prod
 
 ##########################
 # appvote
 ##########################
 
-# Create dev/base units and links
-cub space create --allow-exists appvote-dev --label Environment=dev --where-trigger "SpaceID = '$homeSpaceID'"
-for unit in db redis vote result worker ; do
-cub unit create --space appvote-dev --label Application=appvote $unit appvote/base/${unit}.yaml
-done
-cub function do --space appvote-dev ensure-namespaces
-setup/kube-gen.sh namespace appvote | cub unit create --space appvote-dev --label Application=appvote appvote-ns -
+uploadBase appvote appvote/base/db.yaml appvote/base/redis.yaml appvote/base/result.yaml appvote/base/vote.yaml appvote/base/worker.yaml
 
-cub link create --space appvote-dev - vote redis
-cub link create --space appvote-dev - worker redis
-cub link create --space appvote-dev - result db
-cub link create --space appvote-dev - worker db
-cub link create --space "*" --where-space "Slug = 'appvote-dev'" --where-from "Slug != 'appvote-ns'" --where-to "Slug = 'appvote-ns'"
+clink appvote deployment-vote   service-redis
+clink appvote deployment-worker service-redis
+clink appvote deployment-result service-db
+clink appvote deployment-worker service-db
 
-# Clone units and links to prod
-cub space create --allow-exists appvote-prod --label Environment=prod --where-trigger "SpaceID = '$homeSpaceID'"
-cub unit create --space appvote-dev --where-space "Slug = 'appvote-prod'"
+cloneVariants appvote
 
 # Customize dev and prod
+cub function do --space appvote-dev --unit ingress-vote-ingress set-hostname dev-vote.appvote.cubby.bz
+cub function do --space appvote-dev --unit ingress-result-ingress set-hostname dev-results.appvote.cubby.bz
 
-cub function do --space appvote-dev --unit vote set-hostname dev-vote.appvote.cubby.bz
-cub function do --space appvote-dev --unit result set-hostname dev-results.appvote.cubby.bz
-
-cub function do --space appvote-prod --unit vote set-hostname www.appvote.cubby.bz
-cub function do --space appvote-prod --unit result set-hostname results.appvote.cubby.bz
+cub function do --space appvote-prod --unit ingress-vote-ingress set-hostname www.appvote.cubby.bz
+cub function do --space appvote-prod --unit ingress-result-ingress set-hostname results.appvote.cubby.bz
 
 ##########################
 # apptique
 ##########################
 
-# Create dev/base units and links
-cub space create --allow-exists apptique-dev --label Environment=dev --where-trigger "SpaceID = '$homeSpaceID'"
+# Upload all kubernetes-manifests except kustomization.yaml and loadgenerator.yaml.
+apptique_files=()
 for file in apptique/kubernetes-manifests/*.yaml ; do
-unit="$(basename -s .yaml $file)"
-if [[ "$unit" != kustomization ]] && [[ "$unit" != loadgenerator ]] ; then
-cub unit create --space apptique-dev --label Application=apptique $unit $file
-# Set to pre-built image
-cub function do --space apptique-dev --unit $unit set-image server "us-central1-docker.pkg.dev/google-samples/microservices-demo/${unit}:v0.10.3"
-fi
+    base="$(basename -s .yaml "$file")"
+    if [[ "$base" != kustomization ]] && [[ "$base" != loadgenerator ]] ; then
+        apptique_files+=("$file")
+    fi
 done
-cub function do --space apptique-dev ensure-namespaces
-setup/kube-gen.sh namespace apptique | cub unit create --space apptique-dev --label Application=apptique apptique-ns -
+uploadBase apptique "${apptique_files[@]}"
 
-#cub link create --space apptique-dev - loadgenerator frontend
-cub link create --space apptique-dev - frontend adservice
-cub link create --space apptique-dev - frontend recommendationservice
-cub link create --space apptique-dev - frontend productcatalogservice
-cub link create --space apptique-dev - frontend cartservice
-cub link create --space apptique-dev - frontend shippingservice
-cub link create --space apptique-dev - frontend currencyservice
-cub link create --space apptique-dev - recommendationservice productcatalogservice
-cub link create --space apptique-dev - frontend checkoutservice
-cub link create --space apptique-dev - checkoutservice productcatalogservice
-cub link create --space apptique-dev - checkoutservice cartservice
-cub link create --space apptique-dev - checkoutservice shippingservice
-cub link create --space apptique-dev - checkoutservice currencyservice
-cub link create --space apptique-dev - checkoutservice paymentservice
-cub link create --space apptique-dev - checkoutservice emailservice
-cub link create --space "*" --where-space "Slug = 'apptique-dev'" --where-from "Slug != 'apptique-ns'" --where-to "Slug = 'apptique-ns'"
+# Pin every service to its pre-built image on the base, so dev and prod inherit
+# it. The manifests carry bare image names (e.g. "adservice") on the "server"
+# container; prepend the shared registry to those (that have none) and set the
+# shared tag — two space-wide calls instead of one per service. Both are scoped
+# to the "server" container so third-party images on other containers (the
+# redis-cart "redis" container, busybox init containers) are left untouched.
+cub function do --space apptique-base set-image-registry-by-registry "" "us-central1-docker.pkg.dev/google-samples/microservices-demo" server
+cub function do --space apptique-base set-container-image-reference server ':v0.10.3'
 
-# Clone units and links to prod
-cub space create --allow-exists apptique-prod --label Environment=prod --where-trigger "SpaceID = '$homeSpaceID'"
-cub unit create --space apptique-dev --where-space "Slug = 'apptique-prod'"
+clink apptique deployment-frontend              service-adservice
+clink apptique deployment-frontend              service-recommendationservice
+clink apptique deployment-frontend              service-productcatalogservice
+clink apptique deployment-frontend              service-cartservice
+clink apptique deployment-frontend              service-shippingservice
+clink apptique deployment-frontend              service-currencyservice
+clink apptique deployment-frontend              service-checkoutservice
+clink apptique deployment-recommendationservice service-productcatalogservice
+clink apptique deployment-checkoutservice       service-productcatalogservice
+clink apptique deployment-checkoutservice       service-cartservice
+clink apptique deployment-checkoutservice       service-shippingservice
+clink apptique deployment-checkoutservice       service-currencyservice
+clink apptique deployment-checkoutservice       service-paymentservice
+clink apptique deployment-checkoutservice       service-emailservice
+
+cloneVariants apptique
 
 # Customize dev and prod
-
-cub function do --space apptique-dev --unit frontend set-hostname dev.apptique.cubby.bz
-
-cub function do --space apptique-prod --unit frontend set-hostname www.apptique.cubby.bz
+cub function do --space apptique-dev --unit ingress-frontend-ingress set-hostname dev.apptique.cubby.bz
+cub function do --space apptique-prod --unit ingress-frontend-ingress set-hostname www.apptique.cubby.bz
 
 ##########################
 # Attach targets
@@ -130,9 +161,8 @@ cub unit set-target --space "*" --where "Space.Labels.Environment = 'prod'" plat
 # Apply all the units
 ##########################
 
-cub unit approve --space "*" --where "Labels.Application LIKE 'app%'"
+cub unit approve --space "*" --where "Labels.Application LIKE 'app%' AND TargetID IS NOT NULL"
 
-#cub unit apply --wait --space "*" --where "Labels.Application LIKE 'app%'"
 cub unit apply --wait --space appchat-dev
 cub unit apply --wait --space appvote-dev
 cub unit apply --wait --space apptique-dev
@@ -140,7 +170,7 @@ cub unit apply --wait --space appchat-prod
 cub unit apply --wait --space appvote-prod
 cub unit apply --wait --space apptique-prod
 cub tag create --space home post-initial-apply
-cub unit tag --space "*" --where "Labels.Application LIKE 'app%'" --revision HeadRevisionNum home/post-initial-apply
-cub unit refresh --space "*" --where "Labels.Application LIKE 'app%'"
+cub unit tag --space "*" --where "Labels.Application LIKE 'app%' AND TargetID IS NOT NULL" --revision HeadRevisionNum home/post-initial-apply
+cub unit refresh --space "*" --where "Labels.Application LIKE 'app%' AND TargetID IS NOT NULL"
 cub tag create --space home post-refresh
-cub unit tag --space "*" --where "Labels.Application LIKE 'app%'" --revision HeadRevisionNum home/post-refresh
+cub unit tag --space "*" --where "Labels.Application LIKE 'app%' AND TargetID IS NOT NULL" --revision HeadRevisionNum home/post-refresh
