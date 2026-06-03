@@ -18,9 +18,11 @@
 #   - `cub variant create` clones a "dev" and a "prod" variant from each base,
 #     each with `--namespace <app>` (set-namespace resolves the placeholder) and
 #     `--environment dev|prod` (for target selection).
-#   - Per-variant customizations (hostnames, env vars) are applied afterwards;
-#     base-wide customizations (apptique images) are applied to the base before
-#     cloning so both variants inherit them.
+#   - Ingress hostnames are driven by a per-app "Subdomain" AppConfig/YAML Unit
+#     and a TransformPaths Link (set-hostname = <Subdomain>.<Component>.cubby.bz,
+#     Component from the Space label). Each variant just sets its Subdomain field
+#     and AutoUpdate re-derives the hostname. Other per-variant customizations
+#     (env vars) and base-wide ones (apptique images) are applied directly.
 #
 # Intra-space links (Service->Deployment selectors, namespace links, and
 # ServiceAccount references) are inferred by `cub variant upload`. The previous
@@ -44,7 +46,6 @@ function uploadBase {
         --space-pattern "$PATTERN" \
         --granularity per-resource \
         --namespace confighubplaceholder \
-        --label "Application=${app}" \
         "$@"
     cub space update "${app}-base" --where-trigger "SpaceID = '${homeSpaceID}'"
 }
@@ -54,8 +55,8 @@ function uploadBase {
 # and an Environment label used to attach the cluster target.
 function cloneVariants {
     local app="$1"
-    cub variant create dev  "${app}-base" --space-pattern "$PATTERN" --environment dev  --namespace "$app"
-    cub variant create prod "${app}-base" --space-pattern "$PATTERN" --environment prod --namespace "$app"
+    cub variant create dev  "${app}-base" --space-pattern "$PATTERN" --environment dev  --namespace "$app" --region us --target platform-dev/dev-cluster
+    cub variant create prod "${app}-base" --space-pattern "$PATTERN" --environment prod --namespace "$app" --region us --target platform-prod/prod-cluster
 }
 
 # clink <app> <from-unit> <to-unit> : create a cross-component (network)
@@ -67,6 +68,62 @@ function clink {
     cub link create --space "${1}-base" - "$2" "$3"
 }
 
+# subdomainLinks <app> <subdomain-name> <ingress-unit>... : in <app>-base, create
+# an AppConfig/YAML "Subdomain" Unit (configName <subdomain-name>, schema
+# IngressConfig) holding a placeholder subdomain, then a TransformPaths Link from
+# each given ingress Unit. Each Link derives the ingress hostname as
+# "<Subdomain>.<Component>.cubby.bz" — the Subdomain from the Unit, the Component
+# from the Space label — via set-hostname, and AutoUpdates whenever the Subdomain
+# field changes (including in the cloned dev/prod variants).
+function subdomainLinks {
+    local app="$1" name="$2"; shift 2
+    cat <<EOF | cub unit create --space "${app}-base" --toolchain AppConfig/YAML "$name" -
+configHub:
+  configName: ${name}
+  configSchema: IngressConfig
+Subdomain: confighubplaceholder
+EOF
+    local ingress
+    for ingress in "$@" ; do
+        cat <<EOF | cub link create --space "${app}-base" - "$ingress" "$name" --update-type TransformPaths --auto-update --from-stdin
+UpstreamPaths:
+  - Name: Subdomain
+    Path: Subdomain
+    Resource:
+      ResourceName: ${name}
+      ResourceType: IngressConfig
+DownstreamSetters:
+  - Parameters: [Subdomain]
+    FunctionInvocation:
+      FunctionName: set-hostname
+      Arguments:
+        - Value: "{{.Params.Subdomain}}.{{.SpaceLabels.Component}}.cubby.bz"
+          Evaluator: template
+EOF
+    done
+}
+
+# setSubdomain <space> <subdomain-unit> <value> : set the Subdomain field on the
+# AppConfig/YAML Unit; its TransformPaths Link AutoUpdates the ingress hostname.
+function setSubdomain {
+    cub function set --space "$1" --unit "$2" --toolchain AppConfig/YAML set-string-path IngressConfig Subdomain "$3"
+}
+
+##########################
+# Shared ingress-hostname schema (referenced by every app's Subdomain Unit)
+##########################
+
+cat <<'EOF' | cub unit create --space home --toolchain AppConfig/JSON ingress-config-schema -
+{
+  "configHub": { "configName": "IngressConfig", "configSchema": "JSONSchema" },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "IngressConfig",
+  "type": "object",
+  "properties": { "Subdomain": { "type": "string" } },
+  "required": ["Subdomain"]
+}
+EOF
+
 ##########################
 # appchat
 ##########################
@@ -76,15 +133,18 @@ uploadBase appchat appchat/base/postgres.yaml appchat/base/backend.yaml appchat/
 clink appchat deployment-frontend service-backend
 clink appchat deployment-backend  service-postgres
 
+# Both ingresses share one Subdomain (dev/www).
+subdomainLinks appchat app-ingress ingress-frontend-ingress ingress-backend-ingress
+
 cloneVariants appchat
 
 # Customize dev and prod
-cub function do --space appchat-dev --unit ingress-frontend-ingress --unit ingress-backend-ingress set-hostname dev.appchat.cubby.bz
-cub function do --space appchat-dev --unit deployment-backend set-env-var backend CHAT_TITLE "AI Chat Dev"
+setSubdomain appchat-dev app-ingress dev
+cub function set --space appchat-dev --unit deployment-backend set-env-var backend CHAT_TITLE "AI Chat Dev"
 
-cub function do --space appchat-prod --unit ingress-frontend-ingress --unit ingress-backend-ingress set-hostname www.appchat.cubby.bz
-cub function do --space appchat-prod --unit deployment-backend set-env-var backend REGION NA
-cub function do --space appchat-prod --unit deployment-backend set-env-var backend ROLE prod
+setSubdomain appchat-prod app-ingress www
+cub function set --space appchat-prod --unit deployment-backend set-env-var backend REGION us
+cub function set --space appchat-prod --unit deployment-backend set-env-var backend ROLE prod
 
 ##########################
 # appvote
@@ -97,14 +157,18 @@ clink appvote deployment-worker service-redis
 clink appvote deployment-result service-db
 clink appvote deployment-worker service-db
 
+# vote and result have distinct subdomains, so each gets its own Subdomain Unit.
+subdomainLinks appvote vote-ingress   ingress-vote-ingress
+subdomainLinks appvote result-ingress ingress-result-ingress
+
 cloneVariants appvote
 
 # Customize dev and prod
-cub function do --space appvote-dev --unit ingress-vote-ingress set-hostname dev-vote.appvote.cubby.bz
-cub function do --space appvote-dev --unit ingress-result-ingress set-hostname dev-results.appvote.cubby.bz
+setSubdomain appvote-dev  vote-ingress   dev-vote
+setSubdomain appvote-dev  result-ingress dev-results
 
-cub function do --space appvote-prod --unit ingress-vote-ingress set-hostname www.appvote.cubby.bz
-cub function do --space appvote-prod --unit ingress-result-ingress set-hostname results.appvote.cubby.bz
+setSubdomain appvote-prod vote-ingress   www
+setSubdomain appvote-prod result-ingress results
 
 ##########################
 # apptique
@@ -126,8 +190,8 @@ uploadBase apptique "${apptique_files[@]}"
 # shared tag — two space-wide calls instead of one per service. Both are scoped
 # to the "server" container so third-party images on other containers (the
 # redis-cart "redis" container, busybox init containers) are left untouched.
-cub function do --space apptique-base set-image-registry-by-registry "" "us-central1-docker.pkg.dev/google-samples/microservices-demo" server
-cub function do --space apptique-base set-container-image-reference server ':v0.10.3'
+cub function set --space apptique-base set-image-registry-by-registry "" "us-central1-docker.pkg.dev/google-samples/microservices-demo" server
+cub function set --space apptique-base set-container-image-reference server ':v0.10.3'
 
 clink apptique deployment-frontend              service-adservice
 clink apptique deployment-frontend              service-recommendationservice
@@ -144,24 +208,20 @@ clink apptique deployment-checkoutservice       service-currencyservice
 clink apptique deployment-checkoutservice       service-paymentservice
 clink apptique deployment-checkoutservice       service-emailservice
 
+# Single frontend ingress.
+subdomainLinks apptique app-ingress ingress-frontend-ingress
+
 cloneVariants apptique
 
 # Customize dev and prod
-cub function do --space apptique-dev --unit ingress-frontend-ingress set-hostname dev.apptique.cubby.bz
-cub function do --space apptique-prod --unit ingress-frontend-ingress set-hostname www.apptique.cubby.bz
-
-##########################
-# Attach targets
-##########################
-
-cub unit set-target --space "*" --where "Space.Labels.Environment = 'dev'" platform-dev/dev-cluster
-cub unit set-target --space "*" --where "Space.Labels.Environment = 'prod'" platform-prod/prod-cluster
+setSubdomain apptique-dev  app-ingress dev
+setSubdomain apptique-prod app-ingress www
 
 ##########################
 # Apply all the units
 ##########################
 
-cub unit approve --space "*" --where "Labels.Application LIKE 'app%' AND TargetID IS NOT NULL"
+cub unit approve --space "*" --where "Labels.Component LIKE 'app%' AND TargetID IS NOT NULL"
 
 cub unit apply --wait --space appchat-dev
 cub unit apply --wait --space appvote-dev
@@ -170,7 +230,7 @@ cub unit apply --wait --space appchat-prod
 cub unit apply --wait --space appvote-prod
 cub unit apply --wait --space apptique-prod
 cub tag create --space home post-initial-apply
-cub unit tag --space "*" --where "Labels.Application LIKE 'app%' AND TargetID IS NOT NULL" --revision HeadRevisionNum home/post-initial-apply
-cub unit refresh --space "*" --where "Labels.Application LIKE 'app%' AND TargetID IS NOT NULL"
+cub unit tag --space "*" --where "Labels.Component LIKE 'app%' AND TargetID IS NOT NULL" --revision HeadRevisionNum home/post-initial-apply
+cub unit refresh --space "*" --where "Labels.Component LIKE 'app%' AND TargetID IS NOT NULL"
 cub tag create --space home post-refresh
-cub unit tag --space "*" --where "Labels.Application LIKE 'app%' AND TargetID IS NOT NULL" --revision HeadRevisionNum home/post-refresh
+cub unit tag --space "*" --where "Labels.Component LIKE 'app%' AND TargetID IS NOT NULL" --revision HeadRevisionNum home/post-refresh
