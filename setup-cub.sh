@@ -8,8 +8,9 @@
 # https://github.com/confighub-kubecon-2025/apptique
 #
 # run from .. (the kubecon directory), after setup/setup-clusters.sh has created
-# the home space (triggers/filters), the platform-dev/platform-prod spaces, and
-# the dev-cluster/prod-cluster targets.
+# the home space (triggers/filters) and brought up the dev and prod clusters,
+# each with its own space holding a server-hosted OCI worker and an OCI target
+# (dev/target, prod/target).
 #
 # This version uses `cub variant upload` + `cub variant create`:
 #   - Each application is uploaded once as a "base" variant from its rendered
@@ -52,11 +53,14 @@ function uploadBase {
 
 # cloneVariants <app> : clone dev and prod variants from the app's base. Each
 # variant gets its real namespace (set-namespace replaces confighubplaceholder)
-# and an Environment label used to attach the cluster target.
+# and an Environment label. --target binds the clones to the cluster's OCI
+# target and sets the new space's release target, which `cub release publish`
+# requires; because that target is a cub-cluster Argo target, the clone also
+# creates the deployment's Argo CD Application in the cluster's apps space.
 function cloneVariants {
     local app="$1"
-    cub variant create dev  "${app}-base" --space-pattern "$PATTERN" --environment dev  --namespace "$app" --region us --target platform-dev/dev-cluster
-    cub variant create prod "${app}-base" --space-pattern "$PATTERN" --environment prod --namespace "$app" --region us --target platform-prod/prod-cluster
+    cub variant create dev  "${app}-base" --space-pattern "$PATTERN" --environment dev  --namespace "$app" --region us --target dev/target
+    cub variant create prod "${app}-base" --space-pattern "$PATTERN" --environment prod --namespace "$app" --region us --target prod/target
 }
 
 # clink <app> <from-unit> <to-unit> : create a cross-component (network)
@@ -218,19 +222,20 @@ setSubdomain apptique-dev  app-ingress dev
 setSubdomain apptique-prod app-ingress www
 
 ##########################
-# Apply all the units
+# Release every deployment
 ##########################
+
+# A Release bundles a whole space's units at once and publishes them to the
+# space's release target, where Argo CD picks the bundle up and syncs it.
 
 cub unit approve --space "*" --where "Labels.Component LIKE 'app%' AND TargetID IS NOT NULL"
 
-cub unit apply --wait --space appchat-dev
-cub unit apply --wait --space appvote-dev
-cub unit apply --wait --space apptique-dev
-cub unit apply --wait --space appchat-prod
-cub unit apply --wait --space appvote-prod
-cub unit apply --wait --space apptique-prod
-cub tag create --space home post-initial-apply
-cub unit tag --space "*" --where "Labels.Component LIKE 'app%' AND TargetID IS NOT NULL" --revision HeadRevisionNum home/post-initial-apply
-cub unit refresh --space "*" --where "Labels.Component LIKE 'app%' AND TargetID IS NOT NULL"
-cub tag create --space home post-refresh
-cub unit tag --space "*" --where "Labels.Component LIKE 'app%' AND TargetID IS NOT NULL" --revision HeadRevisionNum home/post-refresh
+cub release publish appchat-dev
+cub release publish appvote-dev
+cub release publish apptique-dev
+cub release publish appchat-prod
+cub release publish appvote-prod
+cub release publish apptique-prod
+
+cub tag create --space home post-initial-release
+cub unit tag --space "*" --where "Labels.Component LIKE 'app%' AND TargetID IS NOT NULL" --revision HeadRevisionNum home/post-initial-release
