@@ -228,8 +228,6 @@ setSubdomain apptique-prod app-ingress www
 # A Release bundles a whole space's units at once and publishes them to the
 # space's release target, where Argo CD picks the bundle up and syncs it.
 
-cub unit approve --space "*" --where "Labels.Component LIKE 'app%' AND TargetID IS NOT NULL"
-
 cub release publish appchat-dev
 cub release publish appvote-dev
 cub release publish apptique-dev
