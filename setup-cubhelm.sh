@@ -55,6 +55,5 @@ importChart apptique-helm apptique/helm-chart apptique/helm-chart/values.yaml
 
 for space in appchat-helm-dev appvote-helm-dev apptique-helm-dev \
              appchat-helm-prod appvote-helm-prod apptique-helm-prod ; do
-    cub unit approve --space "$space" --where "TargetID IS NOT NULL"
     cub release publish "$space"
 done

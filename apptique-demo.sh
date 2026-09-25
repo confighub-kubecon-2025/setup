@@ -44,7 +44,7 @@ IMAGE_REPO=$REGISTRY/frontend
 # the frontend's image still traces back to the change made on the base.
 CART_REPO=$REGISTRY/cartservice
 
-SECTIONS="cluster install policy release change approve guard blame prod undo cleanup"
+SECTIONS="cluster install policy release change guard blame prod approve undo cleanup"
 
 usage() {
     cat <<EOF
@@ -53,13 +53,13 @@ usage: apptique-demo.sh [section ...]
 sections, in demo order:
   cluster   bring up the dev and prod kind clusters, wired to ConfigHub
   install   seed the base from the apptique Helm chart's rendered output
-  policy    the platform space: approval, and a ValidatingAdmissionPolicy run before release
-  release   the dev deployment: clone, approve, release, running pods
+  policy    the platform space: a change workflow that requires review before prod
+  release   the dev deployment: clone, release, running pods
   change    change the base, promote to dev -- the daily loop
-  approve   review and approval: a change blocked until someone approves it
   guard     shift left: the cluster's own admission policy, enforced before release
   blame     who set this field, when and why -- chart, base, or this variant
   prod      a production deployment stamped from the same base
+  approve   review and approval: a change held out of prod until someone approves it
   undo      an urgent prod change, undone by restoring a released revision
   cleanup   tear down the clusters, the worker, and the spaces
 
@@ -128,12 +128,28 @@ section_policy() {
     desc "them rather than each team re-stating them."
     run "cub space create apptique-platform --label Layer=Platform"
 
-    desc "The first rule: changes need a reviewer. vet-approvedby gates any revision"
-    desc "with fewer than one approval, and a gated revision cannot be released."
-    run "cub trigger create --space apptique-platform require-approval Mutation Kubernetes/YAML vet-approvedby 1"
-    run "cub trigger list --space apptique-platform"
+    desc "The first rule: nothing reaches prod without a reviewer. That is a rule about"
+    desc "how a change moves, not about what it contains, so it is a change workflow: the"
+    desc "stages a change goes through, and what has to hold before it enters each one."
+    desc "Entering prod needs an approval of the change as it runs in dev."
+    desc "This demo has one person, so the workflow lets the author approve their own"
+    desc "change. Leave AllowAuthors out and it takes someone else."
+    run "cub changeworkflow create --space apptique-platform reviewed --from-stdin <<'EOF'
+Stages:
+  - Name: dev
+    WhereSpace: \"Labels.Variant = 'dev'\"
+  - Name: prod
+    WhereSpace: \"Labels.Variant = 'prod'\"
+    Prerequisites: [reviewed]
+AttestationPrerequisites:
+  - Name: reviewed
+    Description: an approval of the change in dev
+    AllowAuthors: true
+EOF"
 
-    desc "The base opts in by pointing its trigger selector at the platform space."
+    desc "Rules about what a change contains are Triggers, and they live here too. There"
+    desc "are none yet; the base opts in to whatever the platform space holds by pointing"
+    desc "its trigger selector at it."
     run "cub space update apptique-base --where-trigger \"SpaceID = '\$(space_id apptique-platform)'\""
 
     desc "That is the only place it has to be said. A variant created from this base"
@@ -150,15 +166,12 @@ section_release() {
     desc "the namespace placeholder filled in."
     run "cub variant create dev apptique-base --target dev/target --namespace apptique"
 
-    desc "It inherited the base's trigger selector, so it is already reviewed -- nothing"
-    desc "to opt in."
+    desc "It inherited the base's trigger selector, so the platform's rules already apply"
+    desc "to it -- nothing to opt in."
     run "cub space get apptique-dev -o jq='.Space.WhereTrigger'"
 
-    desc "Nothing is running yet. Publishing is deliberate, and now also reviewed -- so"
-    desc "approve the deployment first."
-    run "cub variant approve apptique-dev"
-
-    desc "Now publish. ConfigHub writes the release to its OCI endpoint; Argo pulls it."
+    desc "Nothing is running yet. Publishing is deliberate. ConfigHub writes the release"
+    desc "to its OCI endpoint; Argo pulls it."
     run "cub release publish apptique-dev"
 
     desc "Argo notices the release on its next sync and applies it. Waiting for the"
@@ -185,35 +198,11 @@ section_change() {
     run "cub variant promote apptique-dev"
 }
 
-section_approve() {
-    heading "Review and approval"
-    use_cluster dev
-
-    desc "The change landed in dev, but it is not releasable: the platform's approval"
-    desc "rule attached a gate to the revision it created."
-    run "cub unit list --space apptique-dev --where \"LEN(ApplyGates) > 0\""
-
-    desc "A gate is not advisory. Releasing is refused while one is on."
-    run "cub release publish apptique-dev"
-
-    desc "So a reviewer looks at what actually changed -- the fields, not a diff of"
-    desc "rendered YAML."
-    run "cub unit diff --space apptique-dev deployment-frontend --from=-1 -o mutations"
-
-    desc "and approves the variant. Approval is per revision: this one, and no later"
-    desc "one, so the next change is gated again without anyone re-arming anything."
-    desc "Approving waits for the triggers to finish re-evaluating, so the release that"
-    desc "follows is not racing them."
-    run "cub variant approve apptique-dev"
-    run "cub release publish apptique-dev"
-    run "kubectl get pods -n apptique"
-}
-
 section_guard() {
     heading "Shift the admission policy left"
 
-    desc "Approval catches what a reviewer notices. The next rule catches what they do"
-    desc "not -- and it is a rule the cluster already has. This is a real Kubernetes"
+    desc "A reviewer catches what they notice. The next rule catches what they do not --"
+    desc "and it is a rule the cluster already has. This is a real Kubernetes"
     desc "ValidatingAdmissionPolicy, the same file you would install in the cluster."
     run "cat $POLICY"
 
@@ -255,10 +244,8 @@ section_guard() {
     desc "Nothing was deployed, so nothing has to be rolled back. Fix the tag."
     run "cub function set --space apptique-dev --unit deployment-cartservice set-container-image server $CART_REPO:v0.10.3 --change-desc \"Pin the tag: policy forbids :latest\""
 
-    desc "The policy gate is gone. Approval is still required, which is the two rules"
-    desc "doing their separate jobs."
+    desc "The policy gate is gone, so the release goes through."
     run "cub unit get --space apptique-dev deployment-cartservice"
-    run "cub variant approve apptique-dev"
     run "cub release publish apptique-dev"
 }
 
@@ -308,11 +295,10 @@ section_prod() {
     desc "Same clone as dev, with a production label and a delete gate on the Units."
     run "cub variant create prod apptique-base --target prod/target --namespace apptique --environment Prod --unit-delete-gate critical"
 
-    desc "It inherits both rules from the base -- approval and the admission policy --"
-    desc "with no worker, Trigger, or opt-in of its own. The rules were written once."
+    desc "It inherits the admission policy from the base, with no worker, Trigger, or"
+    desc "opt-in of its own. The rule was written once."
     run "cub space get apptique-prod -o jq='.Space.WhereTrigger'"
 
-    run "cub variant approve apptique-prod"
     run "cub release publish apptique-prod"
     run "source ~/.confighub/clusters/prod.env"
     run "kubectl -n apptique wait --for=create deployment/frontend --timeout=300s"
@@ -323,6 +309,40 @@ section_prod() {
     run "cub space list --where \"Labels.Component = 'apptique'\""
 }
 
+section_approve() {
+    heading "Review and approval"
+    use_cluster dev
+
+    desc "Changes so far went straight to the deployment they were made for. A change"
+    desc "meant for every deployment goes through the platform's workflow, as a change"
+    desc "order: the base revisions it covers, and the stages it moves through."
+    run "cub function set --space apptique-base --unit deployment-frontend set-replicas 2 --change-desc \"Two frontend replicas for availability\""
+    run "cub changeorder create --space apptique-base frontend-ha --description \"Run two frontend replicas\" --change-workflow apptique-platform/reviewed"
+
+    desc "Promoting the change order takes it into its first stage, dev."
+    run "cub variant promote --change-order apptique-base/frontend-ha"
+    run "cub release publish apptique-dev"
+
+    desc "Prod is next, and entering prod needs a review. Nobody has reviewed it yet, so"
+    desc "the promotion is refused and prod is untouched."
+    run "cub variant promote --change-order apptique-base/frontend-ha --target-stage prod"
+
+    desc "So a reviewer looks at what actually changed in dev -- the fields, not a diff"
+    desc "of rendered YAML."
+    run "cub unit diff --space apptique-dev deployment-frontend --from=-1 -o mutations"
+
+    desc "and approves it. The approval is an attestation recorded against these exact"
+    desc "revisions, so a later change with different content needs its own."
+    run "cub variant approve --change-order apptique-base/frontend-ha --stage dev"
+    run "cub attestation list --space apptique-dev"
+
+    desc "Now the promotion into prod goes through, and prod releases it."
+    run "cub variant promote --change-order apptique-base/frontend-ha --target-stage prod"
+    run "cub release publish apptique-prod"
+    run "source ~/.confighub/clusters/prod.env"
+    run "kubectl -n apptique rollout status deployment/frontend --timeout=300s"
+}
+
 section_undo() {
     heading "Make and undo a change"
 
@@ -331,7 +351,6 @@ section_undo() {
     desc "reconcile the drift away later, and leave no record. Here it is an ordinary"
     desc "change to one environment, and only that one."
     run "cub function set --space apptique-prod --unit deployment-frontend --protect set-replicas 5 -o mutations --change-desc \"Temporary capacity boost for the traffic spike\""
-    run "cub variant approve apptique-prod"
     run "cub release publish apptique-prod"
     run "source ~/.confighub/clusters/prod.env"
     run "kubectl get pods -n apptique"
@@ -342,8 +361,7 @@ section_undo() {
     run "cub revision list --space apptique-prod deployment-frontend"
 
     desc "So the release before the boost names the state to restore."
-    run "cub unit update --patch --space apptique-prod deployment-frontend --restore Tag:release-1 -o mutations --change-desc \"Revert the capacity boost\""
-    run "cub variant approve apptique-prod"
+    run "cub unit update --patch --space apptique-prod deployment-frontend --restore Tag:release-2 -o mutations --change-desc \"Revert the capacity boost\""
     run "cub release publish apptique-prod"
 
     desc "Restore goes forward, not back: a new revision carrying the old data and its"
@@ -526,7 +544,7 @@ main() {
     selected="$*"
     requested="$selected"
     if [ -z "$requested" ]; then
-        requested="cluster install policy release change approve guard blame prod undo"
+        requested="cluster install policy release change guard blame prod approve undo"
     fi
 
     for name in $requested; do

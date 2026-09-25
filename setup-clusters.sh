@@ -56,7 +56,6 @@ cub trigger create --space home --allow-exists --disable ensure-nonroot Mutation
 
 # Filters
 cub filter create --space home --allow-exists unapplied-changes Unit --where-field "HeadRevisionNum > LastReleasedRevisionNum AND TargetID IS NOT NULL"
-cub filter create --space home --allow-exists not-approved Unit --where-field "HeadRevisionNum > LastReleasedRevisionNum AND LEN(ApprovedBy) = 0"
 cub filter create --space home --allow-exists has-apply-gates Unit --where-field "LEN(ApplyGates) > 0"
 cub filter create --space home --allow-exists run-as-root Unit --where-field "ToolchainType = 'Kubernetes/YAML'" --resource-type "apps/v1/Deployment" --where-data "spec.template.spec.|securityContext.runAsNonRoot != true AND spec.template.spec.containers.*.|securityContext.runAsNonRoot != true"
 cub filter create --space home --allow-exists kubernetes Unit --where-field "ToolchainType = 'Kubernetes/YAML'"
